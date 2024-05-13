@@ -1,1 +1,108 @@
+import numpy as np
+from mnist import load_mnist
+import pickle
+from gradient import numerical_gradient
+from collections import OrderedDict
+import matplotlib.pyplot as plt
 
+(x_train, t_train), (x_test, t_test) = load_mnist(normalize=True, flatten=True, one_hot_label=False)
+
+input_size = 784
+hidden_size1 = 15
+hidden_size2 = 15 
+output_size = 10   
+
+iters_num = 10000  
+train_size = x_train.shape[0]
+batch_size = 100  
+learning_rate = 0.019  # 학습률
+
+from common.layers import Relu, Affine, SoftmaxWithLoss
+
+class ThreeLayerNet:
+    def __init__(self, input_size, hidden_size1, hidden_size2, output_size, weight_init_std=0.01):
+        # 가중치 초기화
+        self.params = {}
+        self.params['W1'] = weight_init_std * np.random.randn(input_size, hidden_size1)
+        self.params['b1'] = np.zeros(hidden_size1)
+        self.params['W2'] = weight_init_std * np.random.randn(hidden_size1, hidden_size2)
+        self.params['b2'] = np.zeros(hidden_size2)
+        self.params['W3'] = weight_init_std * np.random.randn(hidden_size2, output_size)
+        self.params['b3'] = np.zeros(output_size)
+
+        # 계층 생성
+        self.layers = OrderedDict()
+        self.layers['Affine1'] = Affine(self.params['W1'], self.params['b1'])
+        self.layers['Relu1'] = Relu()
+        self.layers['Affine2'] = Affine(self.params['W2'], self.params['b2'])
+        self.layers['Relu2'] = Relu()
+        self.layers['Affine3'] = Affine(self.params['W3'], self.params['b3'])
+
+        self.lastLayer = SoftmaxWithLoss()
+
+    def predict(self, x):
+        for layer in self.layers.values():
+            x = layer.forward(x)
+        return x
+
+    def loss(self, x, t):
+        y = self.predict(x)
+        return self.lastLayer.forward(y, t)
+
+    def accuracy(self, x, t):
+        y = self.predict(x)
+        y = np.argmax(y, axis=1)
+        if t.ndim != 1:
+            t = np.argmax(t, axis=1)
+        accuracy = np.sum(y == t) / float(x.shape[0])
+        return accuracy
+
+    def numerical_gradient(self, x, t):
+        loss_W = lambda W: self.loss(x, t)
+
+        grads = {}
+        grads['W1'] = numerical_gradient(loss_W, self.params['W1'])
+        grads['b1'] = numerical_gradient(loss_W, self.params['b1'])
+        grads['W2'] = numerical_gradient(loss_W, self.params['W2'])
+        grads['b2'] = numerical_gradient(loss_W, self.params['b2'])
+        grads['W3'] = numerical_gradient(loss_W, self.params['W3'])
+        grads['b3'] = numerical_gradient(loss_W, self.params['b3'])
+
+        return grads
+
+    def gradient(self, x, t):
+        # forward
+        self.loss(x, t)
+
+        # backward
+        dout = 1
+        dout = self.lastLayer.backward(dout)
+
+        layers = list(self.layers.values())
+        layers.reverse()
+        for layer in layers:
+            dout = layer.backward(dout)
+
+        # 결과 저장
+        grads = {}
+        grads['W1'], grads['b1'] = self.layers['Affine1'].dW, self.layers['Affine1'].db
+        grads['W2'], grads['b2'] = self.layers['Affine2'].dW, self.layers['Affine2'].db
+        grads['W3'], grads['b3'] = self.layers['Affine3'].dW, self.layers['Affine3'].db
+
+        return grads
+
+# 손실 함수 값 그래프
+plt.plot(train_loss_list)
+plt.xlabel("iteration")
+plt.ylabel("loss")
+plt.title("Training Loss")
+plt.show()
+
+# 훈련 및 테스트 정확도 그래프
+plt.plot(train_acc_list, label='train acc')
+plt.plot(test_acc_list, label='test acc', linestyle='--')
+plt.xlabel("epochs")
+plt.ylabel("accuracy")
+plt.title("Training and Test Accuracy")
+plt.legend()
+plt.show()
